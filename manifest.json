@@ -1,0 +1,30 @@
+{
+
+    "manifest_version": 2,
+ 
+    "name": "Akto API Security", 
+    "description": "Have complete visibility into all the APIs and PII information being exchanged from this tab",
+    "version": "1.0",
+    "author": "Ankush Jain",
+    "icons": {
+        "16": "assets/16x16.png",
+        "48": "assets/48x48.png",
+        "128":"assets/128x128.png"
+    },
+    "browser_action": {
+        "default_icon": "assets/128x128.png",
+        "default_popup": "src/pages/index.html",
+        "default_title": "Akto API Security"
+    },
+    "permissions": [
+        "activeTab",
+	"webRequest"
+     ],
+    "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'", 
+    "content_scripts": [{
+        "js": ["js/contentScript.js"],
+        "run_at": "document_start",
+	"matches": ["<all_urls>"]
+    }]
+
+}
