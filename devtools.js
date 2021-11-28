@@ -1,0 +1,1 @@
+chrome.devtools.panels.create("Akto", "assets/16x16.png", "index.html", function(panel) {});
