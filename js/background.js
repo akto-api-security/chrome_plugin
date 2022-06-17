@@ -1,20 +1,350 @@
-chrome.browserAction.onClicked.addListener(function() {
-    chrome.tabs.query({
-      active: true,
-      currentWindow: true
-    }, function(tabs) {
-      chrome.tabs.sendMessage(tabs[0].id, "toggle");
-    });
-  });
+window.perfWatch = {};
+portConnected = null
+
+// maintain connection state for each tab
+// if never connected, don't record data
+// always maintain data per tab. When origin changes, discard old data. 
+
+
+
+let SubType = {
+  NULL: "NULL",
+  INTEGER: "INTEGER",
+  FLOAT: "FLOAT",
+  BOOL: "BOOL",
+  STRING: "STRING",
+  OTHER: "OTHER"
+}
+
+function isInt(n){
+  return Number(n) === n && n % 1 === 0;
+}
+
+function isFloat(n){
+  return Number(n) === n && n % 1 !== 0;
+}
+
+function patterns() {
+  let ret = {}
+  ret["EMAIL"] = new RegExp ("^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$");
+  ret["URL"] = new RegExp ("^((((https?|ftps?|gopher|telnet|nntp)://)|(mailto:|news:))(%[0-9A-Fa-f]{2}|[-()_.!~*';/?:@&=+$,A-Za-z0-9])+)([).!';/?:,][[:blank:|:blank:]])?$");
+  ret["CREDIT_CARD"] = new RegExp ("^((4\\d{3})|(5[1-5]\\d{2})|(6011)|(7\\d{3}))-?\\d{4}-?\\d{4}-?\\d{4}|3[4,7]\\d{13}$");
+  ret["SSN"] = new RegExp ("^\\d{3}-\\d{2}-\\d{4}$");
+  ret["UUID"] = new RegExp ("^[A-Z0-9]{8}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{12}$");
+  ret["PAN_CARD"] = new RegExp ("^[A-Z]{5}[0-9]{4}[A-Z]{1}$");
+  ret["PHONE_NUMBER_US"] = new RegExp ("^\D?(\d{3})\D?\D?(\d{3})\D?(\d{4})$");
+  ret["PHONE_NUMBER_INDIA"] = /^(?:\s+|)((0|(?:(\+|)91))(?:\s|-)*(?:(?:\d(?:\s|-)*\d{9})|(?:\d{2}(?:\s|-)*\d{8})|(?:\d{3}(?:\s|-)*\d{7})|\d{10}))(?:\s+|)$/
+  return ret
+}
+
+function isSensitive(str) {
+  return patterns[str] !== null
+}
+
+function findSubType(o) {
+
+  let patternMap = patterns()
+  for(var key in patternMap) {
+      let value = patternMap[key]
+      let res = value.exec(o+"")
+      if (res) {
+          return key
+      }
+  }
+
+  if (+o) {
+      o = +o
+  }
+
+  if (o === null) {
+      return SubType.NULL;
+  } 
+
+  if (isInt(o)) {
+      return SubType.INTEGER
+  }
+
+  if (isFloat(o)) {
+      return SubType.FLOAT
+  }
+
+  if (typeof o == "boolean") {
+      return SubType.BOOL
+  }
+
+  if (typeof o === "string") {
+      return SubType.STRING;
+  }
+
+  return SubType.OTHER;    
+}
+
+function createSingleTypeInfo(subType) {
+  return {
+      type: subType,
+      values: []
+  }
+}
+
+function flattenHelper(obj, result, prefix) {
+  if (!obj || prefix.length > 100) {
+      return 
+  }
+
+  if (Array.isArray(obj)) {
+      for(var index in obj) {
+          flattenHelper(obj[index], result, prefix)
+      }
+  } else if (typeof obj === 'object') {
+      Object.keys(obj).forEach(key => {
+          flattenHelper(obj[key], result, prefix+"."+key)
+      })
+  } else {
+      let info = result[prefix]
+      if (!info) {
+          info = {}
+          result[prefix] = info
+      }
+      
+      let subType = findSubType(obj)
+
+      if(!subType) {
+          subType = SubType.OTHER
+      } 
+      
+      let subTypeInfo = info[subType]
+
+      if (!subTypeInfo) {
+          subTypeInfo = createSingleTypeInfo(subType)
+          info[subType] = subTypeInfo
+      }
+
+      subTypeInfo.values.push(obj)
+  }
+}
+
+function flatten(details, prefix) {
+  let ret = {}
+  if (!details) {
+      return ret
+  }
+  flattenHelper(details, ret, prefix)
+  return ret
+}
+
+function tryJson(str) {
+  try {
+      return JSON.parse(str);
+  } catch (e) {
+      return null;
+  }
+}
+
+function getQueryParams(qs) {
+  qs = qs.split('+').join(' ');
+
+  var params = {},
+      tokens,
+      re = /[?&]?([^=]+)=([^&]*)/g;
+
+  while (tokens = re.exec(qs)) {
+      params[decodeURIComponent(tokens[1])] = decodeURIComponent(tokens[2]);
+  }
+
+  return params;
+}
+
+var catalog = {
+  tryParamsOrJson: obj => {
+      try {
+          if (obj == null) {
+              return {}
+          }
+
+          if (typeof obj=== "object") {
+              return flatten(obj, "")
+          }
+
+          if (typeof obj === "string") {
+              let json = tryJson(obj, "")
+
+              if (json) {
+                  return flatten(json, "")
+              } else {
+                  return flatten(getQueryParams(obj), "")
+              }
+          }
+      } catch (e) {
+          return null;
+      }
+
+      return {}
+  },
   
-  chrome.runtime.onMessage.addListener(
-    function(request, sender, sendResponse) {
-      if(request == "captureSelector") {
-        console.log(sender);
-        console.log("'Capture DOM selector' event detected");
-  
-        chrome.debugger.attach({tabId: sender.tab.id}, "1.0");
+  toSuperType: subType => {
+      return (patterns()[subType]) ? "STRING" : subType
+  },
+
+  isSensitive: str => {
+      return !!(patterns()[str])
+  }
+}
+
+function aggregateInfo(method, url, reqHeaders, reqBody, respHeaders, respBody, endpoints) {
+  try { 
+    let endpointObj = endpoints[method + " " + url]
+    if (!endpointObj) {
+        if (Object.entries(endpoints).length > 1000) {
+          console.log("1000 endpoints reached!")
+          return;
+        }
+        endpointObj = {
+            color: "#f44336",
+            method: method,
+            endpoint: url,
+            type: [],
+            authType: "Bearer"
+        }
+        endpoints[method + " " + url] = endpointObj
+    }
+    let allTypes = Object.values({...reqHeaders, ...respHeaders, ...respBody, ...reqBody})
+    let sensitive = allTypes.map(Object.keys).flat().filter(y => catalog.isSensitive(y))
+    
+    if (sensitive && sensitive.length > 0) {
+        endpointObj.type = Array.from(new Set([...endpointObj.type, ...sensitive]))
+    }
+
+  } catch (e) {
+      console.error(e)
+  }
+};
+
+function parseHeaderString(str) {
+  var arr = str.split('\r\n');
+  var headers = arr.reduce(function (acc, current, i){
+      var parts = current.split(': ');
+      acc[parts[0]] = parts[1];
+      return acc;
+  }, {});
+  return headers
+};
+
+
+function onNewApiCall(apiCall, endpoints) {
+  let _aggregateInfo = aggregateInfo                
+  if (apiCall.status >= 200 && apiCall.status < 300) {
+      if (apiCall.url && apiCall.method) {
+          try {
+              let requestBodyObj = {}
+              let requestHeadersObj = {}
+              let responseBodyObj = {}
+              let responseHeadersObj = {}
+
+              
+              requestHeadersObj = catalog.tryParamsOrJson(apiCall.requestHeaders) || {}
+              let requestBody = apiCall.requestBody
+
+              if (requestBody) {
+                  requestBodyObj = catalog.tryParamsOrJson(requestBody) || {}
+              }
+
+              let queryString = apiCall.url.indexOf("?") != -1 ? apiCall.url.split("?")[1] : ""
+
+              if (queryString && queryString.length > 0) {
+                  let queryStringObj = catalog.tryParamsOrJson(queryString) || {}
+                  requestBodyObj = {...requestBodyObj, ...queryStringObj}
+              }  
+
+
+              if (apiCall.responseHeaders) {
+                  let parsedHeaders = parseHeaderString(apiCall.responseHeaders)
+                  responseHeadersObj = catalog.tryParamsOrJson(parsedHeaders) || {}
+              }
+
+              if (apiCall.responseBody) {
+                  responseBodyObj = catalog.tryParamsOrJson(apiCall.responseBody) || {}
+              }
+
+              let endpoint = null
+
+              try {
+                  endpoint = new URL(apiCall.url)
+              } catch (e) {
+                  endpoint = new URL (new URL(apiCall.page).pathname + apiCall.url)
+              }
+
+              if (endpoint) {
+                  _aggregateInfo(
+                      apiCall.method, 
+                      endpoint.pathname, 
+                      requestHeadersObj, 
+                      requestBodyObj, 
+                      responseHeadersObj, 
+                      responseBodyObj,
+                      endpoints
+                  )
+              }
+          } catch(e) {
+
+          }
+      }
+  }                
+};
+
+chrome.extension.onConnect.addListener(function(port) {
+  portConnected = port  
+  chrome.tabs.query({ currentWindow: true, active: true }, function (tabs) {
+    let currHostname = new URL(tabs[0].url).hostname
+    if (Object.keys(window.perfWatch).length == 0) {
+      window.perfWatch[currHostname] = {
+        connected: true,
+        startTime: parseInt(Date.now()/1000),
+        origin: currHostname,
+        endpoints: {}
+      }  
+    } else if (!window.perfWatch[currHostname]) {
+      port.postMessage({storedWebsiteHostNames: Object.keys(window.perfWatch), currHostname})
+    } else {
+      port.postMessage(window.perfWatch[currHostname])
+    }
+  });    
+
+  port.onMessage.addListener((s) => {
+    if (s.emptyState) {
+      delete(window.perfWatch[s.emptyState])
+
+      if (s.startListeningToNew) {
+        window.perfWatch = {}
+        chrome.tabs.query({ active: true }, function (tabs) {
+          let currHostname = new URL(tabs[0].url).hostname
+          window.perfWatch[currHostname] = {
+            connected: true,
+            startTime: parseInt(Date.now()/1000),
+            origin: currHostname,
+            endpoints: {}
+          }  
+        })        
       }
     }
-  );
-  
+  })
+
+  port.onDisconnect.addListener(function() {
+    if (window.perfWatch[currHostname]) {
+      window.perfWatch[currHostname].connected = false
+    }
+  })
+})
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    let currHostname = new URL(message.data.page).hostname
+    let currData = window.perfWatch[currHostname]
+    if (currData) {
+      onNewApiCall(message.data, currData.endpoints)
+
+      if (currData.connected) {
+        portConnected.postMessage(currData)
+      }
+    }
+});
+
+

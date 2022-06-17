@@ -9,7 +9,6 @@
     XHR.open = function(method, url) {
         this._method = method;
         this._url = url;
-        console.log("open", url);
         this._requestHeaders = {};
         this._startTime = +(new Date());
 
@@ -23,43 +22,53 @@
 
     XHR.send = function(postData) {
 
-        this.addEventListener('load', function() {
+        var f = function(_this) {
+
             var endTime = +(new Date());
-            var myUrl = this._url ? this._url.toLowerCase() : this._url;
-            console.log("send", this._url);
+            var myUrl = _this._url;
 
             if(myUrl) {
                 // here you get the RESPONSE HEADERS
-                var responseHeaders = this.getAllResponseHeaders();
+                var responseHeaders = _this.getAllResponseHeaders();
 
-                if ( this.responseType != 'blob' && this.responseText) {
+                if ( _this.responseType != 'blob' && _this.responseText) {
                     // responseText is string or null
                     try {
                         let obj = {
                             url: myUrl,
                             page: window.location.href,
-                            startTime: this._startTime,
+                            startTime: _this._startTime,
                             endTime: endTime,
-                            method: this._method,
-                            status: this.status,
-                            requestHeaders: this._requestHeaders,
+                            method: _this._method,
+                            status: _this.status,
+                            requestHeaders: _this._requestHeaders,
                             requestBody: postData,
                             responseHeaders: responseHeaders,
-                            responseBody: this.responseText
+                            responseBody: _this.responseText
                         }
-                        obj = JSON.parse(JSON.stringify(obj));
-                        window.postMessage(obj);  
+                        obj = JSON.stringify(obj);
+                        window.postMessage(JSON.parse(obj));  
+
                     } catch(err) {
-                        console.log("Error in responseType try catch");
                         console.log(err);
                     }
                 }
 
             }
-        });
+        }
+
+        var events = ["abort", "error", "loadend", "load", "progress", "timeout"]
+
+        for (var i = 0; i < events.length; i++) {
+            let x = events[i]
+            let _this = this
+            this.addEventListener(x, function(e) {
+                f(_this)
+            })
+        }
+        this.addEventListener('load', f);
 
         return send.apply(this, arguments);
     };
 
 })(XMLHttpRequest);
-
