@@ -5,6 +5,34 @@ portConnected = null
 // if never connected, don't record data
 // always maintain data per tab. When origin changes, discard old data. 
 
+const CLIENT_ID = encodeURIComponent('779574722609-j4scecjhuiiu8u8g9hegjs27ihhpa3c2.apps.googleusercontent.com');
+const RESPONSE_TYPE = encodeURIComponent('code');
+const REDIRECT_URI = encodeURIComponent('https://mooaboaffjhdnjgokejegdbifojdmpea.chromiumapp.org/')
+const SCOPE = "https%3A//www.googleapis.com/auth/userinfo.email%20https%3A//www.googleapis.com/auth/userinfo.profile"
+const STATE = encodeURIComponent('meet' + Math.random().toString(36).substring(2, 15));
+const PROMPT = encodeURIComponent('consent');
+
+let user_signed_in = false;
+
+function is_user_signed_in() {
+    return user_signed_in;
+}
+
+function create_auth_endpoint() {
+    let nonce = encodeURIComponent(Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15));
+
+    let openId_endpoint_url =
+        `https://accounts.google.com/o/oauth2/v2/auth
+?client_id=${CLIENT_ID}
+&response_type=${RESPONSE_TYPE}
+&redirect_uri=${REDIRECT_URI}
+&scope=${SCOPE}
+&state=${STATE}
+&nonce=${nonce}
+&prompt=${PROMPT}`;
+
+    return openId_endpoint_url;
+}
 
 
 let SubType = {
@@ -336,6 +364,28 @@ chrome.extension.onConnect.addListener(function(port) {
 })
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+
+
+  if (message.action === 'login') {
+
+    if (user_signed_in) {
+      return;
+    } else {
+      chrome.identity.launchWebAuthFlow({
+        url: create_auth_endpoint(),
+        interactive: true
+      }, function (redirect_uri) {
+        console.log(redirect_uri)
+        async function startRequest() {
+          const response = await fetch("https://api.quotable.io/random");
+          const newData = await response.json();
+          const data = `${newData.content} —${newData.author}`;
+          console.log(data);
+        }      
+        startRequest()        
+      })
+    }
+  } else {  
     let currHostname = new URL(message.data.page).hostname
     let currData = window.perfWatch[currHostname]
     if (currData) {
@@ -345,6 +395,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         portConnected.postMessage(currData)
       }
     }
+  }
 });
 
 
