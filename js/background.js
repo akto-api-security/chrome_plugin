@@ -351,6 +351,23 @@ chrome.extension.onConnect.addListener(function(port) {
             origin: currHostname,
             endpoints: {}
           }  
+
+          if (allCollectionsList == null) {
+            return
+          }
+          
+          let collectionFound = allCollectionsList.find(x => x.displayName === currHostname)
+      
+          if (collectionFound) {
+            window.perfWatch[currHostname].apiCollectionId = collectionFound.id 
+          } else {
+            if (createCollectionInAktoFunc) {
+              createCollectionInAktoFunc(currHostname).then(collectionDetails => {
+                allCollectionsList.push(collectionDetails)
+                window.perfWatch[currHostname].apiCollectionId = collectionDetails.id
+              })
+            }
+          }
         })        
       }
     }
@@ -362,6 +379,103 @@ chrome.extension.onConnect.addListener(function(port) {
     }
   })
 })
+
+let allCollectionsList = null
+
+function populateAllCollectionsList(token) {
+  fetch("http://localhost:8080/api/getAllCollections", {
+    "headers": {
+      "accept": "application/json, text/plain, */*",
+      "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
+      "access-control-allow-origin": "*",
+      "access-token": token,
+      "account": "1655709762",
+      "content-type": "application/json",
+      "sec-ch-ua": "\" Not A;Brand\";v=\"99\", \"Chromium\";v=\"102\", \"Google Chrome\";v=\"102\"",
+      "sec-ch-ua-mobile": "?0",
+      "sec-ch-ua-platform": "\"macOS\"",
+      "sec-fetch-dest": "empty",
+      "sec-fetch-mode": "cors",
+      "sec-fetch-site": "same-origin"
+    },
+    "body": "{}",
+    "method": "POST",
+    "mode": "cors",
+    "credentials": "include"
+  }).then(response => {
+    return response.json()
+  }).then(data => {
+    allCollectionsList = data.apiCollections
+  });
+}
+
+function generateCreateCollectionInAktoFunc(token) {
+
+  if (allCollectionsList == null) {
+    populateAllCollectionsList(token)
+  }
+
+  var createCollectionInAkto = function(collectionName) {
+
+    fetch("http://localhost:8080/api/createCollection", {
+      "headers": {
+        "accept": "application/json, text/plain, */*",
+        "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
+        "access-control-allow-origin": "*",
+        "access-token": token,
+        "account": "1655709762",
+        "content-type": "application/json",
+        "sec-ch-ua": "\" Not A;Brand\";v=\"99\", \"Chromium\";v=\"102\", \"Google Chrome\";v=\"102\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin"
+      },
+      "body": "{\"collectionName\":\""+collectionName+"\"}",
+      "method": "POST",
+      "mode": "cors",
+      "credentials": "include"
+    }).then(response => {
+      populateAllCollectionsList(token)
+    });    
+  }
+
+  return createCollectionInAkto
+}
+
+function generateSendToAktoFunc(token) {
+  var sendToAkto = function(messages, apiCollectionId) {
+    fetch("http://localhost:8080/api/uploadTraffic", {
+      "headers": {
+        "accept": "application/json, text/plain, */*",
+        "accept-language": "en-US,en;q=0.9,mr;q=0.8",
+        "access-control-allow-origin": "*",
+        "access-token": token,
+        "content-type": "application/json",
+        "sec-ch-ua": "\" Not A;Brand\";v=\"99\", \"Chromium\";v=\"102\", \"Google Chrome\";v=\"102\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"macOS\"",
+        "sec-fetch-dest": "empty",
+        "sec-fetch-mode": "cors",
+        "sec-fetch-site": "same-origin",
+        "x-akto-ignore": "true"
+      },
+      "referrerPolicy": "strict-origin-when-cross-origin",
+      "body": JSON.stringify({apiCollectionId: apiCollectionId + 0, skipKafka: true, content: {log: JSON.parse(JSON.stringify(messages))}}),
+      "method": "POST",
+      "mode": "cors",
+      "credentials": "include"
+    }).then(response => {
+      return response.json()
+    })
+  }
+
+  return sendToAkto
+} 
+
+let sendToAktoFunc = null
+let createCollectionInAktoFunc = null
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
@@ -375,21 +489,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         url: create_auth_endpoint(),
         interactive: true
       }, function (redirect_uri) {
-        console.log(redirect_uri)
-        async function startRequest() {
-          const response = await fetch("https://api.quotable.io/random");
-          const newData = await response.json();
-          const data = `${newData.content} —${newData.author}`;
-          console.log(data);
+        let urlObj = new URL(redirect_uri)
+        let urlParams = getQueryParams(urlObj.search)
+        async function startRequest(code, state) {
+          let aktoUrl = "http://localhost:8080/signup-google?code="+code+"&state="+state+"&shouldLogin=true"
+          const response = await fetch(aktoUrl);
+          let token = response.headers.get("access-token")
+
+          if (token) {
+            sendToAktoFunc = generateSendToAktoFunc(token)
+            createCollectionInAktoFunc = generateCreateCollectionInAktoFunc(token)
+          }
         }      
-        startRequest()        
+        startRequest(urlParams.code, urlParams.state) 
       })
     }
   } else {  
     let currHostname = new URL(message.data.page).hostname
     let currData = window.perfWatch[currHostname]
-    if (currData) {
+    if (currData && !message.data.requestHeaders["x-akto-ignore"]) {
       onNewApiCall(message.data, currData.endpoints)
+
+      if (sendToAktoFunc) {
+        message.data.responseHeaders = parseHeaderString(message.data.responseHeaders)
+        let collectionFound = allCollectionsList.find(x => x.displayName === currHostname)
+
+        sendToAktoFunc(message.data, collectionFound.id || currData.apiCollectionId)
+      }
 
       if (currData.connected) {
         portConnected.postMessage(currData)
