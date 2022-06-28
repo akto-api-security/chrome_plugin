@@ -478,10 +478,14 @@ let sendToAktoFunc = null
 let createCollectionInAktoFunc = null
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-
-
-  if (message.action === 'login') {
-
+  if (message.action === 'logout') {
+    user_signed_in = false
+    sendToAktoFunc = null
+    createCollectionInAktoFunc = null
+    sendResponse({user_signed_in})
+  } else if (message.action === 'user_signed_in') {
+    sendResponse({user_signed_in})
+  } else if (message.action === 'login') {
     if (user_signed_in) {
       return;
     } else {
@@ -501,6 +505,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             createCollectionInAktoFunc = generateCreateCollectionInAktoFunc(token)
           }
         }      
+        user_signed_in = true
         startRequest(urlParams.code, urlParams.state) 
       })
     }
