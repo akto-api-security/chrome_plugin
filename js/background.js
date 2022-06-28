@@ -462,7 +462,7 @@ function generateSendToAktoFunc(token) {
         "x-akto-ignore": "true"
       },
       "referrerPolicy": "strict-origin-when-cross-origin",
-      "body": JSON.stringify({apiCollectionId: apiCollectionId + 0, skipKafka: true, content: {log: JSON.parse(JSON.stringify(messages))}}),
+      "body": JSON.stringify({apiCollectionId: apiCollectionId + 0, skipKafka: false, content: {log: JSON.parse(JSON.stringify(messages))}}),
       "method": "POST",
       "mode": "cors",
       "credentials": "include"

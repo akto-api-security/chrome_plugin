@@ -30,27 +30,34 @@
             if(myUrl) {
                 // here you get the RESPONSE HEADERS
                 var responseHeaders = _this.getAllResponseHeaders();
-
-                if ( _this.responseType != 'blob' && _this.responseText) {
-                    // responseText is string or null
-                    try {
-                        let obj = {
-                            url: myUrl,
-                            page: window.location.href,
-                            startTime: _this._startTime,
-                            endTime: endTime,
-                            method: _this._method,
-                            status: _this.status,
-                            requestHeaders: _this._requestHeaders,
-                            requestBody: postData,
-                            responseHeaders: responseHeaders,
-                            responseBody: _this.responseText
+                let responseBody = ''
+                if ( _this.responseType != 'blob') {
+                    if (_this.responseType === 'arraybuffer') {
+                        if (_this.response) {
+                            var dec = new TextDecoder("utf-8");
+                            responseBody = dec.decode(_this.response)
                         }
-                        obj = JSON.stringify(obj);
-                        window.postMessage(JSON.parse(obj));  
+                    } else {
+                        responseBody = _this.responseText
+                        try {
+                            let obj = {
+                                url: myUrl,
+                                page: window.location.href,
+                                startTime: _this._startTime,
+                                endTime: endTime,
+                                method: _this._method,
+                                status: _this.status,
+                                requestHeaders: _this._requestHeaders,
+                                requestBody: postData,
+                                responseHeaders: responseHeaders,
+                                responseBody: responseBody
+                            }
+                            obj = JSON.stringify(obj);
+                            window.postMessage(JSON.parse(obj));  
 
-                    } catch(err) {
-                        console.log(err);
+                        } catch(err) {
+                            console.log(err);
+                        }
                     }
                 }
 
@@ -72,3 +79,55 @@
     };
 
 })(XMLHttpRequest);
+
+const { fetch: originalFetch } = window;
+
+window.fetch = async (...args) => {
+    let [resource, options] = args;
+
+    let startTime = +(new Date());
+    let url = typeof resource === "string" ? resource : resource.url
+    let method = typeof resource === "string" && options? options.method : resource.method
+    let headers = typeof resource === "string" && options? options.headers : resource.headers
+    let body = options? options.body : "{}"
+    method = method || "GET"
+    const response = await originalFetch(resource, options);
+
+    let endTime = +(new Date());
+
+    let responseBody = ''
+    
+    if (response.responseType != 'blob') {
+        if (response.responseType === 'arraybuffer') {
+            if (response.response) {
+                var dec = new TextDecoder("utf-8");
+                responseBody = dec.decode(response.response)
+            }
+        } else {
+            responseBody = await response.clone().text()
+        }
+    }
+
+    
+
+    let responseHeaders = {}
+    for (var pair of response.headers.entries()) {
+        responseHeaders[pair[0]] = pair[1]
+     }
+     
+    let obj = {
+        url,
+        page: window.location.href,
+        startTime,
+        endTime,
+        method,
+        status: response.status,
+        requestHeaders: headers,
+        requestBody: body,
+        responseHeaders: responseHeaders,
+        responseBody
+    }
+    obj = JSON.stringify(obj);
+    window.postMessage(JSON.parse(obj));  
+    return response;
+};
