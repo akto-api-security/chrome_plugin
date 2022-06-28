@@ -467,7 +467,11 @@ function generateSendToAktoFunc(token) {
       "mode": "cors",
       "credentials": "include"
     }).then(response => {
-      return response.json()
+      if (response.status == 302) {
+        logout()
+      } else {
+        return response.json()
+      }
     })
   }
 
@@ -477,11 +481,15 @@ function generateSendToAktoFunc(token) {
 let sendToAktoFunc = null
 let createCollectionInAktoFunc = null
 
+function logout() {
+  user_signed_in = false
+  sendToAktoFunc = null
+  createCollectionInAktoFunc = null
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'logout') {
-    user_signed_in = false
-    sendToAktoFunc = null
-    createCollectionInAktoFunc = null
+    logout()
     sendResponse({user_signed_in})
   } else if (message.action === 'user_signed_in') {
     sendResponse({user_signed_in})
