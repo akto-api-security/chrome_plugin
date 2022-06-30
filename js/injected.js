@@ -45,7 +45,7 @@
                                 page: window.location.href,
                                 startTime: _this._startTime,
                                 endTime: endTime,
-                                method: _this._method,
+                                method: _this._method.toUpperCase(),
                                 status: _this.status,
                                 requestHeaders: _this._requestHeaders,
                                 requestBody: postData,
@@ -90,7 +90,7 @@ window.fetch = async (...args) => {
     let method = typeof resource === "string" && options? options.method : resource.method
     let headers = typeof resource === "string" && options? options.headers : resource.headers
     let body = options? options.body : "{}"
-    method = method || "GET"
+    method = method.toUpperCase() || "GET"
     const response = await originalFetch(resource, options);
 
     let endTime = +(new Date());

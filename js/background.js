@@ -248,6 +248,9 @@ function aggregateInfo(method, url, reqHeaders, reqBody, respHeaders, respBody, 
 };
 
 function parseHeaderString(str) {
+
+  if(typeof str === "object") return str
+
   var arr = str.split('\r\n');
   var headers = arr.reduce(function (acc, current, i){
       var parts = current.split(': ');
@@ -467,7 +470,7 @@ function generateSendToAktoFunc(token) {
       "mode": "cors",
       "credentials": "include"
     }).then(response => {
-      if (response.status == 302) {
+      if (response.status == 302 || response.status >= 400) {
         logout()
       } else {
         return response.json()
