@@ -324,7 +324,7 @@ function onNewApiCall(apiCall, endpoints) {
 
 chrome.extension.onConnect.addListener(function(port) {
   portConnected = port  
-  chrome.tabs.query({ currentWindow: true, active: true }, function (tabs) {
+  chrome.tabs.query({ active: true }, function (tabs) {
     let currHostname = new URL(tabs[0].url).hostname
     if (Object.keys(window.perfWatch).length == 0) {
       window.perfWatch[currHostname] = {
@@ -373,11 +373,11 @@ chrome.extension.onConnect.addListener(function(port) {
     }
   })
 
-  port.onDisconnect.addListener(function() {
-    if (window.perfWatch[currHostname]) {
-      window.perfWatch[currHostname].connected = false
-    }
-  })
+  // port.onDisconnect.addListener(function() {
+  //   if (window.perfWatch[currHostname]) {
+  //     window.perfWatch[currHostname].connected = false
+  //   }
+  // })
 })
 
 let allCollectionsList = null
@@ -488,6 +488,28 @@ function logout() {
   createCollectionInAktoFunc = null
 }
 
+function transformDevtoolRequest(devtoolsRequest, responseContent) {
+  let request = devtoolsRequest.request
+  let response = devtoolsRequest.response
+
+  return {
+    url: request.url,
+    method: request.method,
+    status: response.status,
+    requestHeaders: request.headers.reduce((z, e) => {
+      z[e.name] = e.value
+      return z
+    }, {}),
+    requestBody: request.postData ? request.postData.text : "{}",
+    responseHeaders: response.headers.reduce((z, e) => {
+      z[e.name] = e.value
+      return z
+    }, {}),
+    responseBody: responseContent
+  }
+
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'logout') {
     logout()
@@ -524,9 +546,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })
     }
   } else {  
-    let currHostname = new URL(message.data.page).hostname
+    let currHostname = new URL(message.pageUrl || message.data.page).hostname
     let currData = window.perfWatch[currHostname]
-    if (currData && !message.data.requestHeaders["x-akto-ignore"]) {
+
+    if (!currData) return
+
+    if (message.action === 'devtools_request') {
+      message.data = transformDevtoolRequest(message.request, message.responseContent)
+    }
+
+    if (!message.data.requestHeaders["x-akto-ignore"]) {
       onNewApiCall(message.data, currData.endpoints)
 
       if (sendToAktoFunc) {
