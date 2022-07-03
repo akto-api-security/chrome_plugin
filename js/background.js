@@ -365,10 +365,7 @@ chrome.extension.onConnect.addListener(function(port) {
             window.perfWatch[currHostname].apiCollectionId = collectionFound.id 
           } else {
             if (createCollectionInAktoFunc) {
-              createCollectionInAktoFunc(currHostname).then(collectionDetails => {
-                allCollectionsList.push(collectionDetails)
-                window.perfWatch[currHostname].apiCollectionId = collectionDetails.id
-              })
+              createCollectionInAktoFunc(currHostname)
             }
           }
         })        
@@ -385,8 +382,8 @@ chrome.extension.onConnect.addListener(function(port) {
 
 let allCollectionsList = null
 
-function populateAllCollectionsList(token) {
-  fetch("http://localhost:8080/api/getAllCollections", {
+async function populateAllCollectionsList(token) {
+  return await fetch("https://us-east1.app.akto.io/api/getAllCollections", {
     "headers": {
       "accept": "application/json, text/plain, */*",
       "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
@@ -409,6 +406,7 @@ function populateAllCollectionsList(token) {
     return response.json()
   }).then(data => {
     allCollectionsList = data.apiCollections
+    return allCollectionsList
   });
 }
 
@@ -418,9 +416,9 @@ function generateCreateCollectionInAktoFunc(token) {
     populateAllCollectionsList(token)
   }
 
-  var createCollectionInAkto = function(collectionName) {
+  var createCollectionInAkto = async function(collectionName) {
 
-    fetch("http://localhost:8080/api/createCollection", {
+    await fetch("https://us-east1.app.akto.io/api/createCollection", {
       "headers": {
         "accept": "application/json, text/plain, */*",
         "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
@@ -439,9 +437,9 @@ function generateCreateCollectionInAktoFunc(token) {
       "method": "POST",
       "mode": "cors",
       "credentials": "include"
-    }).then(response => {
-      populateAllCollectionsList(token)
-    });    
+    });
+    
+    await populateAllCollectionsList(token)
   }
 
   return createCollectionInAkto
@@ -449,7 +447,7 @@ function generateCreateCollectionInAktoFunc(token) {
 
 function generateSendToAktoFunc(token) {
   var sendToAkto = function(messages, apiCollectionId) {
-    fetch("http://localhost:8080/api/uploadTraffic", {
+    fetch("https://us-east1.app.akto.io/api/uploadTraffic", {
       "headers": {
         "accept": "application/json, text/plain, */*",
         "accept-language": "en-US,en;q=0.9,mr;q=0.8",
@@ -507,13 +505,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         let urlObj = new URL(redirect_uri)
         let urlParams = getQueryParams(urlObj.search)
         async function startRequest(code, state) {
-          let aktoUrl = "http://localhost:8080/signup-google?code="+code+"&state="+state+"&shouldLogin=true"
+          let aktoUrl = "https://us-east1.app.akto.io/signup-google?code="+code+"&state="+state+"&shouldLogin=true"
           const response = await fetch(aktoUrl);
           let token = response.headers.get("access-token")
 
           if (token) {
             sendToAktoFunc = generateSendToAktoFunc(token)
+
             createCollectionInAktoFunc = generateCreateCollectionInAktoFunc(token)
+            chrome.tabs.query({ active: true }, function (tabs) {
+              let currHostname = new URL(tabs[0].url).hostname
+              createCollectionInAktoFunc(currHostname)
+            })
           }
         }      
         user_signed_in = true
