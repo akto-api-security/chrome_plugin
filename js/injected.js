@@ -90,7 +90,7 @@ window.fetch = async (...args) => {
     let method = typeof resource === "string" && options? options.method : resource.method
     let headers = typeof resource === "string" && options? options.headers : resource.headers
     let body = options? options.body : "{}"
-    method = method.toUpperCase() || "GET"
+    method = (method || "GET").toUpperCase()
     const response = await originalFetch(resource, options);
 
     let endTime = +(new Date());
