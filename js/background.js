@@ -510,6 +510,19 @@ function transformDevtoolRequest(devtoolsRequest, responseContent) {
 
 }
 
+function initiateFuncs(token) {
+  if (token) {
+    sendToAktoFunc = generateSendToAktoFunc(token)
+
+    createCollectionInAktoFunc = generateCreateCollectionInAktoFunc(token)
+    chrome.tabs.query({ active: true }, function (tabs) {
+      let currHostname = new URL(tabs[0].url).hostname
+      createCollectionInAktoFunc(currHostname)
+    })
+    user_signed_in = true
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'logout') {
     logout()
@@ -530,18 +543,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           let aktoUrl = "https://us-east1.app.akto.io/signup-google?code="+code+"&state="+state+"&shouldLogin=true"
           const response = await fetch(aktoUrl);
           let token = response.headers.get("access-token")
-
-          if (token) {
-            sendToAktoFunc = generateSendToAktoFunc(token)
-
-            createCollectionInAktoFunc = generateCreateCollectionInAktoFunc(token)
-            chrome.tabs.query({ active: true }, function (tabs) {
-              let currHostname = new URL(tabs[0].url).hostname
-              createCollectionInAktoFunc(currHostname)
-            })
-          }
+          initiateFuncs(token)
         }      
-        user_signed_in = true
         startRequest(urlParams.code, urlParams.state) 
       })
     }
@@ -557,6 +560,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (!message.data.requestHeaders["x-akto-ignore"]) {
       onNewApiCall(message.data, currData.endpoints)
+      if(currData && currData.origin.endsWith("app.akto.io")) {
+        if (!sendToAktoFunc && message.data.requestHeaders) {
+          debugger
+          let headersObj = catalog.tryParamsOrJson(message.data.requestHeaders) || {}
+          let token = headersObj["access-token"] || headersObj[".access-token"]
+          initiateFuncs(token["STRING"].values[0])
+        }
+      }
 
       if (sendToAktoFunc) {
         message.data.responseHeaders = parseHeaderString(message.data.responseHeaders)
