@@ -383,13 +383,12 @@ chrome.extension.onConnect.addListener(function(port) {
 let allCollectionsList = null
 
 async function populateAllCollectionsList(token) {
-  return await fetch("https://us-east1.app.akto.io/api/getAllCollections", {
+  return await fetch("https://app.akto.io/api/getAllCollections", {
     "headers": {
       "accept": "application/json, text/plain, */*",
       "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
       "access-control-allow-origin": "*",
       "access-token": token,
-      "account": "1655709762",
       "content-type": "application/json",
       "sec-ch-ua": "\" Not A;Brand\";v=\"99\", \"Chromium\";v=\"102\", \"Google Chrome\";v=\"102\"",
       "sec-ch-ua-mobile": "?0",
@@ -418,7 +417,7 @@ function generateCreateCollectionInAktoFunc(token) {
 
   var createCollectionInAkto = async function(collectionName) {
 
-    await fetch("https://us-east1.app.akto.io/api/createCollection", {
+    await fetch("https://app.akto.io/api/createCollection", {
       "headers": {
         "accept": "application/json, text/plain, */*",
         "accept-language": "en-GB,en-US;q=0.9,en;q=0.8",
@@ -447,7 +446,7 @@ function generateCreateCollectionInAktoFunc(token) {
 
 function generateSendToAktoFunc(token) {
   var sendToAkto = function(messages, apiCollectionId) {
-    fetch("https://us-east1.app.akto.io/api/uploadTraffic", {
+    fetch("https://app.akto.io/api/uploadTraffic", {
       "headers": {
         "accept": "application/json, text/plain, */*",
         "accept-language": "en-US,en;q=0.9,mr;q=0.8",
@@ -540,7 +539,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         let urlObj = new URL(redirect_uri)
         let urlParams = getQueryParams(urlObj.search)
         async function startRequest(code, state) {
-          let aktoUrl = "https://us-east1.app.akto.io/signup-google?code="+code+"&state="+state+"&shouldLogin=true"
+          let aktoUrl = "https://app.akto.io/signup-google?code="+code+"&state="+state+"&shouldLogin=true"
           const response = await fetch(aktoUrl);
           let token = response.headers.get("access-token")
           initiateFuncs(token)
@@ -562,7 +561,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       onNewApiCall(message.data, currData.endpoints)
       if(currData && currData.origin.endsWith("app.akto.io")) {
         if (!sendToAktoFunc && message.data.requestHeaders) {
-          debugger
           let headersObj = catalog.tryParamsOrJson(message.data.requestHeaders) || {}
           let token = headersObj["access-token"] || headersObj[".access-token"]
           initiateFuncs(token["STRING"].values[0])
