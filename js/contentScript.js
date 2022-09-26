@@ -15,6 +15,9 @@ window.addEventListener("message", function (event) {
         return;
 
     if (event.data && event.data.url) {
-        chrome.runtime.sendMessage({ data: event.data });
+        function shouldRecord(response) {
+            window.localStorage.setItem("shouldAktoRecord", (response && response.shouldRecord))
+        }
+        chrome.runtime.sendMessage({ data: event.data }, shouldRecord.bind(this));
     }
 }, false);

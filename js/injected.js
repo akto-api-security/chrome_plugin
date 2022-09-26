@@ -27,6 +27,12 @@
             var endTime = +(new Date());
             var myUrl = _this._url;
 
+            var shouldRecord = (window.localStorage.getItem("shouldAktoRecord")+"") === "true";
+
+            if (!shouldRecord && myUrl && myUrl.indexOf("app.akto.io") === -1) {
+                return;
+            }
+
             if(myUrl) {
                 // here you get the RESPONSE HEADERS
                 var responseHeaders = _this.getAllResponseHeaders();
@@ -84,9 +90,15 @@ const { fetch: originalFetch } = window;
 
 window.fetch = async (...args) => {
     let [resource, options] = args;
-
     let startTime = +(new Date());
     let url = typeof resource === "string" ? resource : resource.url
+
+    var shouldRecord = (window.localStorage.getItem("shouldAktoRecord")+"") === "true";
+
+    if (!shouldRecord && url && url.indexOf("app.akto.io") === -1) {
+        return await originalFetch(resource, options);
+    }
+
     let method = typeof resource === "string" && options? options.method : resource.method
     let headers = typeof resource === "string" && options? options.headers : resource.headers
     let body = options? options.body : "{}"

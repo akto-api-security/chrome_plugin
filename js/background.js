@@ -549,7 +549,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
   } else {  
     let currHostname = new URL(message.pageUrl || message.data.page).hostname
+
+    if (currHostname.endsWith("app.akto.io") && !message.data.requestHeaders["x-akto-ignore"]) {
+      if (!sendToAktoFunc && message.data.requestHeaders) {
+        let headersObj = catalog.tryParamsOrJson(message.data.requestHeaders) || {}
+        let token = headersObj["access-token"] || headersObj[".access-token"]
+        initiateFuncs(token["STRING"].values[0])
+      }
+    }
+
     let currData = window.perfWatch[currHostname]
+
+    sendResponse({
+      shouldRecord: !!currData
+    })
 
     if (!currData) return
 
