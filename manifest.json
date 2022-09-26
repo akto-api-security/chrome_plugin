@@ -37,10 +37,5 @@
         "tabs", 
         "identity"
     ],
-    "oauth2": {
-        "client_id": "779574722609-j4scecjhuiiu8u8g9hegjs27ihhpa3c2.apps.googleusercontent.com",
-        "scopes":[""]
-    },
     "content_security_policy": "script-src 'self' 'unsafe-eval'; object-src 'self'"
-
 }
