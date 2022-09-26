@@ -25,7 +25,8 @@
         {
          "run_at": "document_end",
          "js": ["js/contentscript.js"],
-         "matches": ["http://*/*", "https://*/*"]
+         "matches": ["http://*/*", "https://*/*"],
+         "match_origin_as_fallback": true
         }
     ],    
     "externally_connectable": {

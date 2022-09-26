@@ -9,6 +9,12 @@ function injectScript(file_path, tag) {
 
 injectScript(chrome.extension.getURL('js/injected.js'), 'body');
 
+chrome.runtime.onMessage.addListener(function(request, sender, sendResponse) {
+    if (request.new_message_akto) {
+        window.localStorage.setItem("shouldAktoRecord", "true")
+    }
+});
+
 window.addEventListener("message", function (event) {
     // only accept messages from the current tab
     if (event.source != window)
