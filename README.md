@@ -5,7 +5,7 @@ Akto is a plug-n-play API security platform that enables security teams and deve
 
 # Installation
 ![Chrome](https://icons.iconarchive.com/icons/google/chrome/24/Google-Chrome-icon.png) Here are the steps to get install Akto Mini plugin - 
-1. Download the Chrome plugin zip file from here.
+1. Download the Chrome plugin zip file from [here](https://akto-setup.s3.amazonaws.com/templates/akto_chrome_plugin.zip).
 2. Unzip the file. 
 3. Open `chrome://extensions` and enable `Developer mode` located on the top-right.
 4. Click on `Load Unpacked` button and select the unzipped folder from step (2)
