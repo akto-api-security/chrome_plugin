@@ -467,6 +467,7 @@ function generateCreateCollectionInAktoFunc(token) {
 
 function generateSendToAktoFunc(token) {
   var sendToAkto = function(messages, apiCollectionId) {
+    if (!user_signed_in) return;
     fetch("https://app.akto.io/api/uploadTraffic", {
       "headers": {
         "accept": "application/json, text/plain, */*",
