@@ -52,7 +52,7 @@ function isFloat(n){
   return Number(n) === n && n % 1 !== 0;
 }
 
-function patterns() {
+function getBasicPatterns() {
   let ret = {}
   ret["EMAIL"] = new RegExp ("^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$");
   ret["URL"] = new RegExp ("^((((https?|ftps?|gopher|telnet|nntp)://)|(mailto:|news:))(%[0-9A-Fa-f]{2}|[-()_.!~*';/?:@&=+$,A-Za-z0-9])+)([).!';/?:,][[:blank:|:blank:]])?$");
@@ -65,15 +65,36 @@ function patterns() {
   return ret
 }
 
+let basicPatternsMap = getBasicPatterns()
+let customPatternsMap = {}
+let allPatternsMap = getBasicPatterns()
+
+function fillCustomPatterns() {
+  var ret = {}
+  fetch("https://raw.githubusercontent.com/Ankush12389/pii_types/main/pii_source.json")
+  .then(x => x.json())
+  .then(x => 
+    {
+       for(tt in x.types) {
+         ret[x.types[tt].name] = new RegExp(x.types[tt].regexPattern);
+       }
+       customPatternsMap = ret
+       allPatternsMap = {...basicPatternsMap, ...ret} 
+    }
+  )
+}
+fillCustomPatterns()
+
 function isSensitive(str) {
-  return patterns[str] !== null
+  return allPatternsMap[str] !== null
 }
 
 function findSubType(o) {
 
-  let patternMap = patterns()
-  for(var key in patternMap) {
-      let value = patternMap[key]
+  for(var key in allPatternsMap) {
+      let value = allPatternsMap[key]
+      let oStr = o+""
+      if (oStr.length > 100) continue;
       let res = value.exec(o+"")
       if (res) {
           return key
@@ -210,11 +231,11 @@ var catalog = {
   },
   
   toSuperType: subType => {
-      return (patterns()[subType]) ? "STRING" : subType
+      return (allPatternsMap[subType]) ? "STRING" : subType
   },
 
   isSensitive: str => {
-      return !!(patterns()[str])
+      return !!(allPatternsMap[str])
   }
 }
 
@@ -554,6 +575,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (!sendToAktoFunc && message.data.requestHeaders) {
         let headersObj = catalog.tryParamsOrJson(message.data.requestHeaders) || {}
         let token = headersObj["access-token"] || headersObj[".access-token"]
+        if (!token) {
+          return
+        }
         initiateFuncs(token["STRING"].values[0])
       }
     }
@@ -576,11 +600,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (!sendToAktoFunc && message.data.requestHeaders) {
           let headersObj = catalog.tryParamsOrJson(message.data.requestHeaders) || {}
           let token = headersObj["access-token"] || headersObj[".access-token"]
+          if (!token) {
+            return
+          }
           initiateFuncs(token["STRING"].values[0])
         }
       }
 
-      if (sendToAktoFunc) {
+      if (sendToAktoFunc && (allCollectionsList != null || currData.apiCollectionId)) {
         message.data.responseHeaders = parseHeaderString(message.data.responseHeaders)
         let collectionFound = allCollectionsList.find(x => x.displayName === currHostname)
 
@@ -593,5 +620,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
   }
 });
-
 
